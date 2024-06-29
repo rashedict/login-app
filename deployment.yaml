@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: login-app-deployment
+spec:
+  replicas: 2  # Number of replicas (pods) for your application
+  selector:
+    matchLabels:
+      app: login-app  # Matches the label in the pod template
+  template:
+    metadata:
+      labels:
+        app: login-app  # Label for the pod
+    spec:
+      containers:
+      - name: login-app
+        image: rashed271202/login-app:latest
+        volumeMounts:  # Mount the NFS PVC
+          - name: nfs-data  # Adjust the name to match your PVC name if different
+            mountPath: /var/www/html/data  # This can be adjusted based on your application's needs
+      volumes:  # Reference the NFS PVC
+        - name: nfs-data  # Adjust the name to match your PVC name if different
+          persistentVolumeClaim:
+            claimName: nfs-pvc  # Name of the PVC you created (from login-app-pvc.yaml)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: login-app-service
+spec:
+  type: LoadBalancer  # This service type exposes the application externally
+  selector:
+    app: login-app  # Matches the label in the deployment
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:latest
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: "271202"
+          ports:
+            - containerPort: 3306
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-internal-service
+spec:
+  selector:
+    app: mysql
+  type: ClusterIP
+  ports:
+  - protocol: TCP
+    port: 3306
+    targetPort: 3306
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  nfs:
+    server: 10.10.1.10
+    path: /mnt/nfs_share
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
