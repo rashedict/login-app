@@ -1,0 +1,127 @@
+pipeline {
+    agent any
+    
+    environment {
+        registryCredential = 'docker-hub-creds' // Credential ID for Docker Hub
+        KUBE_NAMESPACE = 'jenkins'
+        DOCKER_IMAGE = 'rashed271202/sample-login-app:latest'
+        GIT_REPO_URL = 'https://github.com/rashedict/sample-login-app.git'
+    }
+
+    stages {
+        stage('Fetch Source') {
+            steps {
+                git branch: 'main', url: "${GIT_REPO_URL}"
+            }
+        }
+        
+        stage('Build and Push Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://registry-1.docker.io', registryCredential) {
+                        def customImage = docker.build("${DOCKER_IMAGE}", ".")
+                        customImage.push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    def kubeConfig = readKubeConfig credentialsId: 'k8s-admin-user-token'
+                    kubeConfig.withKubeConfig([credentialsId: 'k8s-admin-user-token']) {
+                        sh "kubectl apply -f sample-login-app/deployment.yaml --namespace ${KUBE_NAMESPACE}"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment successful!'
+        }
+        failure {
+            echo 'Deployment failed!'
+        }
+    }
+}
+
+docker-hub-creds
+
+pipeline {
+  // Run on any available agent
+  agent any
+
+  // Define environment variable for Docker Hub credentials (replace with your actual ID)
+  environment {
+    DOCKER_HUB_CREDENTIALS_ID = 'docker-hub-creds'
+  }
+
+  stages {
+    // Get image from Docker Hub
+    stage('Get Image') {
+      steps {
+        // Retrieve Docker Hub username and password securely
+        script {
+          def credentials =withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDENTIALS_ID}", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            sh "docker login -u ${USERNAME} -p ${PASSWORD}"
+          }
+        }
+
+        // Pull the desired image from Docker Hub
+        sh 'docker pull rashed271202/login-app:latest'
+      }
+    }
+
+    // Update deployment with the new image
+    stage('Update Deployment') {
+      steps {
+        // Write deployment YAML with updated image to a temporary file
+        script {
+          writeFile 'login-app-deployment.yaml', '''
+          # Your provided deployment YAML with the updated image
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: login-app-deployment
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: login-app
+            template:
+              metadata:
+                labels:
+                  app: login-app
+              spec:
+                containers:
+                  - name: login-app
+                    image: rashed271202/login-app:latest  # Update the image here
+                    volumeMounts:
+                      - name: nfs-data
+                        mountPath: /var/www/html/data
+                    volumes:
+                      - name: nfs-data
+                        persistentVolumeClaim:
+                          claimName: nfs-pvc
+          '''
+        }
+
+        // Apply the deployment using kubectl
+        sh 'kubectl apply -f login-app-deployment.yaml'
+      }
+    }
+  }
+}
+
+
+
+
+
+https://10.10.1.10:6443
+
+
+
+eyJhbGciOiJSUzI1NiIsImtpZCI6Imd4Ym5GbGRpUE0tRW0zWF81Z0JZd2ZwOUZtb29MLVJkeVRkcFQ1RnFWc3MifQ.eyJhdWQiOlsiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiXSwiZXhwIjoxNzUxMTk4MDU5LCJpYXQiOjE3MTk2NjIwNTksImlzcyI6Imh0dHBzOi8va3ViZXJuZXRlcy5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsIiwia3ViZXJuZXRlcy5pbyI6eyJuYW1lc3BhY2UiOiJqZW5raW5zIiwic2VydmljZWFjY291bnQiOnsibmFtZSI6ImplbmtpbnMiLCJ1aWQiOiI2ZWEzZDcxOC1hMzgwLTQyODgtODE4Mi1hYzc1OTRmMjZkMmEifX0sIm5iZiI6MTcxOTY2MjA1OSwic3ViIjoic3lzdGVtOnNlcnZpY2VhY2NvdW50OmplbmtpbnM6amVua2lucyJ9.lKv453Gi7AXCjTcl-zKA87f6usZFApzsTcUz3xSUcFnQmtjZ4W96K60_ueI2s0-AmbLxX-0XaS8jvMWU8CiFgbZuIqfK9JbhVeLWM1C9VgqSpQCIsJHgTldBSDkcgFWSpMrNLQ1J292TZWGk8IU2Xy_Xnt5YW2DW6uTaa5m_NeTe7e20TIhBEj7hqwerIjwju0OjPzKwJUTLWKJEjgMcUy2131TnRDT0q53nohRglN2dHSUoBdmogR22P9IhLyeHDSu390DOrGqwrWeeXf0uKnb_0Dkg811SGWFSxyLyHdSDm2AMFrCXYedNDgwEQt0nh_9aW2iDCOy9MYmbc5XzhA
