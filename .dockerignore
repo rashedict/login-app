@@ -1,8 +1,15 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 .git
 node_modules
 Dockerfile
 docker-compose.yml
+=======
+.git
+node_modules
+Dockerfile
+docker-compose.yml
+>>>>>>> ebd8675763b0223774f4c8821a30c05b1ecd60f0
 =======
 .git
 node_modules
